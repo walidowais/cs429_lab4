@@ -20,6 +20,7 @@ short link_bit = 0;
 short accumulator = 0;
 short mem[4096];
 int verbose = 0;
+int halt = 0;
 long long int time = 0;
 FILE *input = NULL;
 
@@ -113,21 +114,18 @@ void drop_the_bass(void){
 	short instruction;
 	short opcode;
 	short rest;
-	int count;
 
 	instruction = 0;
 	opcode = 0;
-	count = 0;
 	rest = 0;
 
-	while(pc >= 0){
+	while(!halt){
 		// fetch
 		instruction = mem[pc];
 
 		// decode
 		opcode = ((instruction & 0xE00) >> 9) & 7;
 		rest = instruction & 0x1FF;
-		count++;
 
 		switch(opcode){
 			case 0:
@@ -158,10 +156,8 @@ void drop_the_bass(void){
 				fprintf(stderr, "Invalid opcode: %d\n", opcode);
 				exit(1);
 		}
-
-		if(count == 20){
-			break;
-		}
+		
+		pc = pc & 0xFFF;
 	}
 }
 
@@ -210,6 +206,7 @@ void TAD(short bits){
 
 void ISZ(short bits){
 	//TODO
+	time++;
 
 	if(verbose){
 		fprintf(stdout, v_format, time, pc, mem[pc], "ISZ", accumulator, link_bit);
@@ -244,20 +241,25 @@ void JMS(short bits){
 	short address = 0;
 	time += 2;
 
-	if(verbose){
-		fprintf(stdout, v_format, time, pc, mem[pc], "JMS", accumulator, link_bit);
-	}
 
 	address = (bits & 0x7F) + ((bits & 0x80) ? (pc & 0xF80) : 0);
 
 	if(bits & 0x100){
 		//indirect
-		mem[mem[address]] = pc + 1;
-		pc = mem[mem[address]] + 1;
 		time++;
+		if(verbose){
+			fprintf(stdout, v_format, time, pc, mem[pc], "JMS I", accumulator, link_bit);
+		}
+
+		mem[mem[address]] = pc + 1;
+		pc = mem[address] + 1;
 	}
 	else{
 		//direct
+		if(verbose){
+			fprintf(stdout, v_format, time, pc, mem[pc], "JMS", accumulator, link_bit);
+		}
+
 		mem[address] = pc + 1;
 		pc = address + 1;
 	}
@@ -267,17 +269,21 @@ void JMP(short bits){
 	short address = 0;
 	time += 1;
 
-	if(verbose){
-		fprintf(stdout, v_format, time, pc, mem[pc], "JMP", accumulator, link_bit);
-	}
-
 	address = (bits & 0x7F) + ((bits & 0x80) ? (pc & 0xF80) : 0);
 
 	if(bits & 0x100){
-		pc = mem[address];
 		time++;
+		if(verbose){
+			fprintf(stdout, v_format, time, pc, mem[pc], "JMP I", accumulator, link_bit);
+		}
+
+		pc = mem[address];
 	}
 	else{
+		if(verbose){
+			fprintf(stdout, v_format, time, pc, mem[pc], "JMP", accumulator, link_bit);
+		}
+
 		pc = address;
 	}
 }
@@ -357,8 +363,8 @@ void OPR(short bits){
 		}
 		if(bits & 0x02){
 			//HLT
+			halt = 1;
 			//TODO
-			pc = -999;
 		}
 	}
 
