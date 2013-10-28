@@ -1,3 +1,11 @@
+/*
+
+	Name: Walid Owais
+	EID: wo783
+	Skip days: 1
+
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,7 +22,6 @@ void JMS(int bits);
 void JMP(int bits);
 void OPR(int bits);
 void IOT(int bits);
-void isz2(void);
 
 int pc = -1;
 int link_bit = 0;
