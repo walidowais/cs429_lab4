@@ -5,20 +5,21 @@
 void process_obj(void);
 void drop_the_bass(void);
 char trim_before(char c, FILE *file);
-short str_to_int(char *str);
-void AND(short bits);
-void TAD(short bits);
-void ISZ(short bits);
-void DCA(short bits);
-void JMS(short bits);
-void JMP(short bits);
-void OPR(short bits);
-void IOT(short bits);
+int str_to_int(char *str);
+void AND(int bits);
+void TAD(int bits);
+void ISZ(int bits);
+void DCA(int bits);
+void JMS(int bits);
+void JMP(int bits);
+void OPR(int bits);
+void IOT(int bits);
+void isz2(void);
 
-short pc = -1;
-short link_bit = 0;
-short accumulator = 0;
-short mem[4096];
+int pc = -1;
+int link_bit = 0;
+int accumulator = 0;
+int mem[4096];
 int verbose = 0;
 int halt = 0;
 long long int time = 0;
@@ -111,9 +112,9 @@ void process_obj(void){
 }
 
 void drop_the_bass(void){
-	short instruction;
-	short opcode;
-	short rest;
+	int instruction;
+	int opcode;
+	int rest;
 
 	instruction = 0;
 	opcode = 0;
@@ -135,6 +136,7 @@ void drop_the_bass(void){
 				TAD(rest);
 				break;
 			case 2:
+				// isz2();
 				ISZ(rest);
 				break;
 			case 3:
@@ -161,8 +163,8 @@ void drop_the_bass(void){
 	}
 }
 
-void AND(short bits){
-	short address = 0;
+void AND(int bits){
+	int address = 0;
 	time += 2;
 
 	address = (bits & 0x7F) + ((bits & 0x80) ? (pc & 0xF80) : 0);
@@ -170,75 +172,116 @@ void AND(short bits){
 	if(bits & 0x100){
 		accumulator = accumulator & mem[mem[address]];
 		time++;
+
+		if(verbose){
+			fprintf(stderr, v_format, time, pc, mem[pc], "AND I", accumulator, link_bit);
+		}
 	}
 	else{
 		accumulator = accumulator & mem[address];
-	}
 
-	if(verbose){
-		fprintf(stdout, v_format, time, pc, mem[pc], "AND", accumulator, link_bit);
+		if(verbose){
+			fprintf(stderr, v_format, time, pc, mem[pc], "AND", accumulator, link_bit);
+		}
 	}
 
 	pc++;
 }
 
-void TAD(short bits){
-	short address = 0;
+void TAD(int bits){
+	int address = 0;
 	time += 2;
 
 	address = (bits & 0x7F) + ((bits & 0x80) ? (pc & 0xF80) : 0);
 	
 	if(bits & 0x100){
 		accumulator = accumulator + mem[mem[address]];
+		if(accumulator & 0xF000){
+			link_bit = (~link_bit) & 0x1;
+			accumulator = accumulator & 0xFFF;
+		}
+
 		time++;
+
+		if(verbose){
+			fprintf(stderr, v_format, time, pc, mem[pc], "TAD I", accumulator, link_bit);
+		}
 	}
 	else{
 		accumulator = accumulator + mem[address];
-	}
-	link_bit = ((accumulator & 0xF000) ? (!link_bit) : link_bit);
+		if(accumulator & 0xF000){
+			link_bit = (~link_bit) & 0x1;
+			accumulator = accumulator & 0xFFF;
+		}
 
-	if(verbose){
-		fprintf(stdout, v_format, time, pc, mem[pc], "TAD", accumulator, link_bit);
-	}
-
-	pc++;
-}
-
-void ISZ(short bits){
-	//TODO
-	time++;
-
-	if(verbose){
-		fprintf(stdout, v_format, time, pc, mem[pc], "ISZ", accumulator, link_bit);
+		if(verbose){
+			fprintf(stderr, v_format, time, pc, mem[pc], "TAD", accumulator, link_bit);
+		}
 	}
 
 	pc++;
 }
 
-void DCA(short bits){
-	short address = 0;
+void ISZ(int bits){
+	int pc_orig;
+	int address;
+
+	pc_orig = pc;
+	address = (bits & 0x7F) + ((bits & 0x080) ? (pc & 0xF80) : (0));
+
+	if(bits & 0x100){
+		mem[mem[address]] = (mem[mem[address]] + 1) & 0xFFF;
+		if(mem[mem[address]] == 0){
+			pc++;
+		}
+
+	}
+	else{
+		mem[address] = (mem[address] + 1) & 0xFFF;
+		if(mem[address] == 0){
+			pc++;
+		}
+	}
+
+	pc++;
+	time += 2;
+
+	accumulator = accumulator & 0xFFF;
+	if(verbose){
+		fprintf(stderr, v_format, time, pc_orig, mem[pc_orig], "ISZ", accumulator, link_bit);
+	}
+
+}
+
+void DCA(int bits){
+	int address = 0;
 	time += 2;
 
 	address = (bits & 0x7F) + ((bits & 0x80) ? (pc & 0xF80) : 0);
 	
 	if(bits & 0x100){
 		mem[mem[address]] = accumulator;
+		accumulator = 0;
 		time++;
+
+		if(verbose){
+			fprintf(stderr, v_format, time, pc, mem[pc], "DCA I", accumulator, link_bit);
+		}
 	}
 	else{
 		mem[address] = accumulator;
-	}
-	accumulator = 0;
-	
-	if(verbose){
-		fprintf(stdout, v_format, time, pc, mem[pc], "DCA", accumulator, link_bit);
+		accumulator = 0;
+
+		if(verbose){
+			fprintf(stderr, v_format, time, pc, mem[pc], "DCA", accumulator, link_bit);
+		}
 	}
 
 	pc++;
 }
 
-void JMS(short bits){
-	short address = 0;
+void JMS(int bits){
+	int address = 0;
 	time += 2;
 
 
@@ -248,7 +291,7 @@ void JMS(short bits){
 		//indirect
 		time++;
 		if(verbose){
-			fprintf(stdout, v_format, time, pc, mem[pc], "JMS I", accumulator, link_bit);
+			fprintf(stderr, v_format, time, pc, mem[pc], "JMS I", accumulator, link_bit);
 		}
 
 		mem[mem[address]] = pc + 1;
@@ -257,7 +300,7 @@ void JMS(short bits){
 	else{
 		//direct
 		if(verbose){
-			fprintf(stdout, v_format, time, pc, mem[pc], "JMS", accumulator, link_bit);
+			fprintf(stderr, v_format, time, pc, mem[pc], "JMS", accumulator, link_bit);
 		}
 
 		mem[address] = pc + 1;
@@ -265,8 +308,8 @@ void JMS(short bits){
 	}
 }
 
-void JMP(short bits){
-	short address = 0;
+void JMP(int bits){
+	int address = 0;
 	time += 1;
 
 	address = (bits & 0x7F) + ((bits & 0x80) ? (pc & 0xF80) : 0);
@@ -274,114 +317,43 @@ void JMP(short bits){
 	if(bits & 0x100){
 		time++;
 		if(verbose){
-			fprintf(stdout, v_format, time, pc, mem[pc], "JMP I", accumulator, link_bit);
+			fprintf(stderr, v_format, time, pc, mem[pc], "JMP I", accumulator, link_bit);
 		}
 
 		pc = mem[address];
 	}
 	else{
 		if(verbose){
-			fprintf(stdout, v_format, time, pc, mem[pc], "JMP", accumulator, link_bit);
+			fprintf(stderr, v_format, time, pc, mem[pc], "JMP", accumulator, link_bit);
 		}
 
 		pc = address;
 	}
 }
 
-void OPR(short bits){
-	char *ops = "";
-	time++;
 
-	if(!(bits & 0x100)){
-		// group 1
-		if(bits & 0x80){
-			//CLA
-			accumulator = 0;
-		}
-		if(bits & 0x40){
-			//CLL
-			link_bit = 0;
-		}
-		if(bits & 0x20){
-			//CMA
-			accumulator = (~accumulator) & 0xFFF;
-		}
-		if(bits & 0x10){
-			//CML
-			link_bit = (~link_bit) & 0x1;
-		}
-		if(bits & 0x01){
-			//IAC
-			accumulator++;
-			if(accumulator & 0xF000){
-				link_bit = (~link_bit) & 0x1;
-				accumulator = accumulator & 0xFFF;
-			}
-		}
-		if((bits & 0x08) && !(bits & 0x02)){
-			//RAR
-			//TODO
-		}
-		if((bits & 0x04) && !(bits & 0x02)){
-			//RAL
-			//TODO
-		}
-		if((bits & 0x08) && (bits & 0x02)){
-			//RTR
-			//TODO
-		}
-		if((bits & 0x04) && (bits & 0x02)){
-			//RTL
-			//TODO
-		}
-	}
-	else{
-		//group 2
-		if(bits & 0x40){
-			//SMA
-			//TODO
-		}
-		if(bits & 0x20){
-			//SZA
-			//TODO
-		}
-		if(bits & 0x10){
-			//SNL
-			//TODO
-		}
-		if(bits & 0x08){
-			//RSS
-			//TODO
-		}
-		if(bits & 0x80){
-			//CLA
-			//TODO
-		}
-		if(bits & 0x04){
-			//OSR
-			//TODO
-		}
-		if(bits & 0x02){
-			//HLT
-			halt = 1;
-			//TODO
-		}
-	}
 
-	if(verbose){
-		fprintf(stdout, v_format, time, pc, mem[pc], ops, accumulator, link_bit);
-	}
-	
-	pc++;
-}
+void IOT(int bits){
+	int device;
 
-void IOT(short bits){
-	//TODO
+	device = (bits & 0x1F8) >> 3;
 	time += 1;
 
-	if(verbose){
-		fprintf(stdout, v_format, time, pc, mem[pc], "IOT", accumulator, link_bit);
+	if(device == 3){
+		accumulator = getchar();
+		accumulator = accumulator & 0xFFF;
+		if(verbose){
+			fprintf(stderr, v_format, time, pc, mem[pc], "IOT 3", accumulator, link_bit);
+		}
 	}
+	else if(device == 4){
+			putchar((accumulator & 0xFF));
+
+		if(verbose){
+			fprintf(stderr, v_format, time, pc, mem[pc], "IOT 4", accumulator, link_bit);
+		}
+	}
+
 
 	pc++;
 }
@@ -394,10 +366,10 @@ char trim_before(char c, FILE *file){
 	return c;
 }
 
-short str_to_int(char *str){
+int str_to_int(char *str){
 	int i;
 	char c;
-	short result;
+	int result;
 
 	i = 0;
 	c = str[i];
@@ -417,9 +389,297 @@ short str_to_int(char *str){
 		}
 
 		i++;
-		// fprintf(stdout, "%d\n", result);
+		// fprintf(stderr, "%d\n", result);
 		c = str[i];
 	}
 
 	return result;
+}
+
+void OPR(int bits){
+	int rss, size, pc_orig;
+	char *ops;
+
+	pc_orig = pc;
+	ops = malloc(40 * sizeof(char));
+	size = 0;
+	rss = 0;
+	time++;
+
+	if(!(bits & 0x100)){
+		// group 1
+		if(bits & 0x80){
+			//CLA
+			accumulator = 0;
+
+			ops[size] = 'C';
+			size++;
+			ops[size] = 'L';
+			size++;
+			ops[size] = 'A';
+			size++;
+		}
+		if(bits & 0x40){
+			//CLL
+			link_bit = 0;
+
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'C';
+			size++;
+			ops[size] = 'L';
+			size++;
+			ops[size] = 'L';
+			size++;
+		}
+		if(bits & 0x20){
+			//CMA
+			accumulator = (~accumulator) & 0xFFF;
+
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'C';
+			size++;
+			ops[size] = 'M';
+			size++;
+			ops[size] = 'A';
+			size++;
+		}
+		if(bits & 0x10){
+			//CML
+			link_bit = (~link_bit) & 0x1;
+
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'C';
+			size++;
+			ops[size] = 'M';
+			size++;
+			ops[size] = 'L';
+			size++;
+		}
+		if(bits & 0x01){
+			//IAC
+			accumulator++;
+			if(accumulator & 0xF000){
+				link_bit = (~link_bit) & 0x1;
+				accumulator = accumulator & 0xFFF;
+			}
+
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'I';
+			size++;
+			ops[size] = 'A';
+			size++;
+			ops[size] = 'C';
+			size++;
+		}
+		if((bits & 0x08) && !(bits & 0x02)){
+			//RAR
+			accumulator = accumulator + (link_bit << 12);
+			link_bit = accumulator & 0x1;
+			accumulator = (accumulator >> 1) & 0xFFF;
+
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'R';
+			size++;
+			ops[size] = 'A';
+			size++;
+			ops[size] = 'R';
+			size++;
+		}
+		if((bits & 0x04) && !(bits & 0x02)){
+			//RAL
+			accumulator = (accumulator << 1) + link_bit;
+			link_bit = accumulator & 0x1000;
+			accumulator = accumulator & 0xFFF;
+
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'R';
+			size++;
+			ops[size] = 'A';
+			size++;
+			ops[size] = 'L';
+			size++;
+		}
+		if((bits & 0x08) && (bits & 0x02)){
+			//RTR
+			accumulator += link_bit << 12;
+			accumulator += (accumulator & 0x1) << 13;
+			link_bit = accumulator & 0x2;
+			accumulator = (accumulator >> 2) && 0xFFF;
+
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'R';
+			size++;
+			ops[size] = 'T';
+			size++;
+			ops[size] = 'R';
+			size++;
+		}
+		if((bits & 0x04) && (bits & 0x02)){
+			//RTL
+			accumulator = (accumulator << 2) + (link_bit << 1);
+			accumulator += (accumulator & 0x2000) >> 13;
+			link_bit = (accumulator & 0x1000) >> 12;
+			accumulator = accumulator & 0xFFF;
+
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'R';
+			size++;
+			ops[size] = 'T';
+			size++;
+			ops[size] = 'L';
+			size++;
+		}
+	}
+	else{
+		//group 2
+		if(bits & 0x08){
+			//RSS
+			rss = 1;
+		}
+		if(bits & 0x40){
+			//SMA
+			if(!rss && (accumulator & 0x800)){
+				pc++;
+			}
+			else if(rss && !(accumulator & 0x800)){
+				pc++;
+			}
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'S';
+			size++;
+			ops[size] = 'M';
+			size++;
+			ops[size] = 'A';
+			size++;
+		}
+		if(bits & 0x20){
+			//SZA
+			if(!rss && !accumulator){
+				pc++;
+			}
+			else if(rss && accumulator){
+				pc++;
+			}
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'S';
+			size++;
+			ops[size] = 'Z';
+			size++;
+			ops[size] = 'A';
+			size++;
+		}
+		if(bits & 0x10){
+			//SNL
+			if(!rss && link_bit){
+				pc++;
+			}
+			else if(rss && !link_bit){
+				pc++;
+			}
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'S';
+			size++;
+			ops[size] = 'N';
+			size++;
+			ops[size] = 'L';
+			size++;
+		}
+		if(rss){
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'R';
+			size++;
+			ops[size] = 'S';
+			size++;
+			ops[size] = 'S';
+			size++;
+		}
+		if(bits & 0x80){
+			//CLA
+			accumulator = 0;
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'C';
+			size++;
+			ops[size] = 'L';
+			size++;
+			ops[size] = 'A';
+			size++;
+		}
+		if(bits & 0x04){
+			//OSR
+			//NOP
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'O';
+			size++;
+			ops[size] = 'S';
+			size++;
+			ops[size] = 'R';
+			size++;
+		}
+		if(bits & 0x02){
+			//HLT
+			halt = 1;
+			if(size){
+				ops[size] = ' ';
+				size++;
+			}
+			ops[size] = 'H';
+			size++;
+			ops[size] = 'L';
+			size++;
+			ops[size] = 'T';
+			size++;
+		}
+	}
+
+	ops[size] = '\0';
+
+	if(verbose){
+		fprintf(stderr, v_format, time, pc_orig, mem[pc_orig], ops, accumulator, link_bit);
+	}
+
+	free(ops);
+	
+	pc++;
 }
